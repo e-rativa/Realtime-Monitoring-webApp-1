@@ -649,8 +649,7 @@ def get_daterange(request):
 
     return start, end
 
-def get_semana_5(request, **kwargs):
-    return JsonResponse({test:"Esto es un test"})
+
 '''
 Filtro para formatear datos en el template de index
 '''
