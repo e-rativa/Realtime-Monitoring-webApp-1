@@ -654,26 +654,27 @@ def get_daterange(request):
 Obtener los datos de una estación en particular
 '''
 def get_data_station(request, **kwargs):
-    user_param = kwargs.get("user", None)
-    measure_param = kwargs.get("measure", None)
-    if user_param == None or measure_param == None:
-        return {"error":"No se porporcionó un usuario o medida"}
-    station_data= []
-    station = Station.objects.filter(user=user_param)[0]
-    selected_measure = Measurement.objects.filter(name=measure_param)[0]
-    print("user_param ",user_param)
-    print("measure_param ",measure_param)
 
+    station_param = kwargs.get("id_station", None)
+    measure_param = kwargs.get("measure", None)
+    station_data= []
+    if station_param == None or measure_param == None:
+        return JsonResponse({"error":"No se porporcionó un id de estación o medida"})
+    try:
+        selected_measure = Measurement.objects.filter(name=measure_param)[0]
+    except IndexError:
+        measurements = Measurement.objects.all()
+        return JsonResponse({"error":"No se porporcionó una medida correcta","measurements":[measure.name for measure in measurements]})
     try:
         start = datetime.fromtimestamp(
             float(request.GET.get("from", None)) / 1000
         )
-    except:
+    except Exception:
         start = None
     try:
         end = datetime.fromtimestamp(
             float(request.GET.get("to", None)) / 1000)
-    except:
+    except Exception:
         end = None
 
     if start == None and end == None:
@@ -686,9 +687,35 @@ def get_data_station(request, **kwargs):
     elif start == None:
         start = datetime.fromtimestamp(0)
 
-    data_by_station = Data.objects.filter(
-        station__user=user_param,measurement__name=selected_measure.name,  time__gte=start.date(), time__lte=end.date())
+    start_formatted = start.strftime("%d/%m/%Y %H:%M:%S") if start != None else " "
+    end_formatted = end.strftime("%d/%m/%Y %H:%M:%S") if end != None else " "
+    data_result = {}
     
+    data_result["start"] = start_formatted
+    data_result["end"] = end_formatted
+    data_result["data"] = station_data
+
+    
+    print("user_param ",station_param)
+    print("measure_param ",measure_param)
+
+    
+    data_by_station = Data.objects.filter(
+        station=station_param,measurement__name=selected_measure.name,  time__gte=start.date(), time__lte=end.date())
+    
+    try:
+        location = data_by_station[0].station.location
+        print(location)
+    except IndexError:
+        return JsonResponse(data_result)
+
+
+    data_result["station"] = {
+        "lat":location.lat,
+        "lng":location.lng,
+        'description': f'{location.city.name}, {location.state.name}, {location.country.name}'
+    }
+
     min_val = data_by_station.aggregate(
         Min('value'))['value__min']
     max_val = data_by_station.aggregate(
@@ -700,19 +727,6 @@ def get_data_station(request, **kwargs):
         'max': max_val if max_val != None else 0,
         'avg': round(avg_val if avg_val != None else 0, 2),
     })
-
-    start_formatted = start.strftime("%d/%m/%Y %H:%M:%S") if start != None else " "
-    end_formatted = end.strftime("%d/%m/%Y %H:%M:%S") if end != None else " "
-    data_result = {}
-    location = station.location
-    data_result["station"] = {
-        "lat":location.lat,
-        "lng":location.lng,
-        'description': f'{location.city.name}, {location.state.name}, {location.country.name}'
-    }
-    data_result["start"] = start_formatted
-    data_result["end"] = end_formatted
-    data_result["data"] = station_data
 
     return JsonResponse(data_result)
 
