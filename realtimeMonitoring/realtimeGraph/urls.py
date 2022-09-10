@@ -13,5 +13,5 @@ urlpatterns = [
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("historical/data", download_csv_data, name="historical-data"),
-    path("estacion/<str:user>/<str:measure>", get_data_station, name="estacion"),
+    path("estacion/<int:id_station>/<str:measure>", get_data_station, name="estacion"),
 ]
