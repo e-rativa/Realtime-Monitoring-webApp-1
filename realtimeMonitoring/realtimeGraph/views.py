@@ -746,6 +746,87 @@ def get_daterange(request):
 
     return start, end
 
+'''
+Obtener los datos de una estación en particular
+'''
+def get_data_station(request, **kwargs):
+    user_param = kwargs.get("user", None)
+    measure_param = kwargs.get("measure", None)
+    if user_param == None or measure_param == None:
+        return JsonResponse({"error":"No se porporcionó un usuario o medida"})
+    station_data= []
+    try:
+        selected_station = Station.objects.filter(user=user_param)[0]
+    except IndexError:
+        print("error")
+        users = Station.objects.all()
+        return JsonResponse({"error":"No se porporcionó un usuario correcto","usuarios":[user.user.login for user in users]})
+    try:
+        selected_measure = Measurement.objects.filter(name=measure_param)[0]
+    except IndexError:
+        measurements = Measurement.objects.all()
+        return JsonResponse({"error":"No se porporcionó una medida correcta","measurements":[measure.name for measure in measurements]})
+    
+    print("user_param ",user_param)
+    print("measure_param ",measure_param)
+    print("user_param ",selected_station.user)
+    print("measure_param ",selected_measure.name)
+    try:
+        start = datetime.fromtimestamp(
+            float(request.GET.get("from", None)) / 1000
+        )
+    except:
+        start = None
+    try:
+        end = datetime.fromtimestamp(
+            float(request.GET.get("to", None)) / 1000)
+    except:
+        end = None
+
+    if start == None and end == None:
+        start = datetime.now()
+        start = start - dateutil.relativedelta.relativedelta(weeks=1)
+        end = datetime.now()
+        end += dateutil.relativedelta.relativedelta(days=1)
+    elif end == None:
+        end = datetime.now()
+    elif start == None:
+        start = datetime.fromtimestamp(0)
+
+    start_ts = int(start.timestamp() * 1000000)
+    end_ts = int(end.timestamp() * 1000000)
+
+    data_by_station = Data.objects.filter(
+        station__user=user_param,measurement__name=selected_measure.name,  time__gte=start_ts, time__lte=end_ts)
+    
+    min_val = data_by_station.aggregate(
+        Min('min_value'))['min_value__min']
+    max_val = data_by_station.aggregate(
+        Max('max_value'))['max_value__max']
+    avg_val = data_by_station.aggregate(
+        Avg('avg_value'))['avg_value__avg']
+    station_data.append({
+        'min': min_val if min_val != None else 0,
+        'max': max_val if max_val != None else 0,
+        'avg': round(avg_val if avg_val != None else 0, 2),
+    })
+
+    start_formatted = start.strftime("%d/%m/%Y %H:%M:%S") if start != None else " "
+    end_formatted = end.strftime("%d/%m/%Y %H:%M:%S") if end != None else " "
+    data_result = {}
+    location = selected_station.location
+    data_result["station"] = {
+        "lat":location.lat,
+        "lng":location.lng,
+        'description': f'{location.city.name}, {location.state.name}, {location.country.name}'
+    }
+    data_result["start"] = start_formatted
+    data_result["end"] = end_formatted
+    data_result["data"] = station_data
+
+    return JsonResponse(data_result)
+
+
 
 """
 Filtro para formatear datos en el template de index
